@@ -28,12 +28,6 @@ The platform supports three user roles:
 
 Teachers can record student progress through three learning components:
 
-| Component | Description | Weight |
-|---|---|---:|
-| CL1 | Adab | 40% |
-| CL2 | Cognitive | 30% |
-| CL3 | Psychomotor | 30% |
-
 Features include:
 - Weekly scores for each learning component.
 - Four assessment weeks per month.
