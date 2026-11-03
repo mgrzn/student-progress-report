@@ -19,18 +19,23 @@ export default async function ParentDashboardPage() {
   if (!user) redirect("/login");
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .single();
+  .from("profiles")
+  .select("full_name, role, approval_status")
+  .eq("id", user.id)
+  .single();
 
   if (profileError || !profile) redirect("/login");
 
   const isAdmin = profile.role === "admin";
   const isParent = profile.role === "parent";
 
-  if (!isAdmin && !isParent) redirect("/dashboard");
+  if (!isAdmin && !isParent) {
+    redirect("/dashboard");
+  }
 
+  if (isParent && profile.approval_status !== "approved") {
+    redirect("/pending-approval");
+  }
   // Ambil relasi wali murid.
   const { data: relationships, error: relationshipError } =
     await supabase

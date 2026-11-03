@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
@@ -12,8 +12,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passwordUpdated, setPasswordUpdated] = useState(false);
 
   const router = useRouter();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setPasswordUpdated(params.get("password_updated") === "1");
+  }, []);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -22,6 +28,7 @@ export default function Login() {
 
     try {
       const db = createClient();
+
       const { error } = await db.auth.signInWithPassword({
         email,
         password,
@@ -47,6 +54,7 @@ export default function Login() {
           </div>
 
           <h1 className="mt-4 text-2xl font-bold">Masuk ke akun</h1>
+
           <p className="mt-2 text-sm text-slate-500">
             Gunakan email dan password terdaftar.
           </p>
@@ -56,7 +64,14 @@ export default function Login() {
           onSubmit={submit}
           className="rounded-2xl border bg-white p-7 shadow-sm"
         >
+          {passwordUpdated && (
+            <p className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
+              Password berhasil diperbarui. Silakan login menggunakan password baru.
+            </p>
+          )}
+
           <label className="text-sm font-semibold">Email</label>
+
           <input
             required
             type="email"
@@ -64,9 +79,19 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             className="mb-5 mt-2 w-full rounded-xl border px-4 py-3"
             placeholder="nama@email.com"
+            autoComplete="email"
           />
 
-          <label className="text-sm font-semibold">Password</label>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-sm font-semibold">Password</label>
+
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-blue-700 hover:underline"
+            >
+              Lupa password?
+            </Link>
+          </div>
 
           <div className="relative mt-2">
             <input
@@ -86,7 +111,9 @@ export default function Login() {
               aria-label={
                 showPassword ? "Sembunyikan password" : "Tampilkan password"
               }
-              title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              title={
+                showPassword ? "Sembunyikan password" : "Tampilkan password"
+              }
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
@@ -99,17 +126,30 @@ export default function Login() {
           )}
 
           <button
+            type="submit"
             disabled={loading}
             className="mt-6 w-full rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white disabled:opacity-50"
           >
             {loading ? "Memproses..." : "Masuk"}
           </button>
 
-          <p className="mt-5 text-center text-xs">
-            <Link href="/" className="text-blue-700">
-              Kembali ke halaman utama
-            </Link>
-          </p>
+          <div className="mt-6 space-y-4 text-center">
+            <p className="text-sm text-slate-600">
+              Belum punya akun?{" "}
+              <Link
+                href="/register"
+                className="font-semibold text-blue-700 hover:underline"
+              >
+                Daftar sekarang
+              </Link>
+            </p>
+
+            <p className="text-xs">
+              <Link href="/" className="text-blue-700">
+                Kembali ke halaman utama
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </main>

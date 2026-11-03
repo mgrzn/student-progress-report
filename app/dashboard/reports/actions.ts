@@ -20,14 +20,36 @@ async function checkStaff() {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, approval_status")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin", "teacher"].includes(profile.role)) {
-    redirect("/dashboard");
+  if (error || !profile) {
+    redirect("/login");
+  }
+
+  // Parent hanya boleh mengakses portal setelah disetujui.
+  if (profile.role === "parent") {
+    if (profile.approval_status !== "approved") {
+      redirect("/pending-approval");
+    }
+
+    redirect("/parent");
+  }
+
+  // Hanya Admin dan Teacher yang boleh menjalankan server actions ini.
+  if (!["admin", "teacher"].includes(profile.role)) {
+    redirect("/login");
+  }
+
+  // Teacher wajib sudah mendapat persetujuan Admin.
+  if (
+    profile.role === "teacher" &&
+    profile.approval_status !== "approved"
+  ) {
+    redirect("/pending-approval");
   }
 
   return { supabase, user };

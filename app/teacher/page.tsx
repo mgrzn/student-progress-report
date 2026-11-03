@@ -13,15 +13,28 @@ export default async function TeacherDashboard() {
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .single();
+  .from("profiles")
+  .select("full_name, role, approval_status")
+  .eq("id", user.id)
+  .single();
 
   if (!profile) redirect("/login");
-  if (profile.role === "parent") redirect("/parent");
+
+  if (profile.role === "parent") {
+    if (profile.approval_status !== "approved") {
+      redirect("/pending-approval");
+    }
+
+    redirect("/parent");
+  }
+
   if (profile.role === "admin") redirect("/dashboard");
+
   if (profile.role !== "teacher") redirect("/login");
+
+  if (profile.approval_status !== "approved") {
+    redirect("/pending-approval");
+  }
 
   const [
     { count: studentCount },

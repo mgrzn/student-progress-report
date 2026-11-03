@@ -14,14 +14,29 @@ async function checkStaff() {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, approval_status")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin", "teacher"].includes(profile.role)) {
-    redirect("/dashboard");
+  if (error || !profile) {
+    redirect("/login");
+  }
+
+  if (profile.role === "parent") {
+    redirect("/parent");
+  }
+
+  if (!["admin", "teacher"].includes(profile.role)) {
+    redirect("/login");
+  }
+
+  if (
+    profile.role === "teacher" &&
+    profile.approval_status !== "approved"
+  ) {
+    redirect("/pending-approval");
   }
 
   return { supabase, user, profile };

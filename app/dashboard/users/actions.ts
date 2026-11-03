@@ -90,6 +90,7 @@ export async function createUserAccount(formData: FormData) {
         id: data.user.id,
         full_name: fullName,
         role,
+        approval_status: "approved",
       },
       { onConflict: "id" }
     );

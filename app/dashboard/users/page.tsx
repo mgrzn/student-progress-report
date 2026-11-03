@@ -7,12 +7,17 @@ import {
   removeParentStudent,
 } from "./actions";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-
+import {
+  approveUserAccount,
+  rejectUserAccount,
+} from "./approval-actions";
 type PageProps = {
   searchParams: Promise<{
     created?: string;
     linked?: string;
     unlinked?: string;
+    approved?: string;
+    rejected?: string;
     error?: string;
   }>;
 };
@@ -56,12 +61,17 @@ export default async function UsersPage({ searchParams }: PageProps) {
   // Ambil seluruh akun.
   const { data: profiles, error: profilesError } = await adminClient
     .from("profiles")
-    .select("id, full_name, role, created_at")
+    .select("id, full_name, role, approval_status, created_at")
     .order("full_name");
 
   if (profilesError) throw new Error(profilesError.message);
 
   const accountList = profiles || [];
+  const pendingAccounts = accountList.filter(
+    (account) =>
+      account.approval_status === "pending" &&
+      ["parent", "teacher"].includes(account.role)
+  );
 
   // Ambil email akun Auth.
   const { data: authUsers, error: authError } =
@@ -146,6 +156,17 @@ export default async function UsersPage({ searchParams }: PageProps) {
           Akun berhasil dibuat.
         </div>
       )}
+      {params.approved === "1" && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          Akun berhasil disetujui. Pengguna sekarang dapat mengakses dashboard.
+        </div>
+      )}
+
+      {params.rejected === "1" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+          Pendaftaran akun berhasil ditolak.
+        </div>
+      )}
 
       {params.linked === "1" && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
@@ -164,6 +185,105 @@ export default async function UsersPage({ searchParams }: PageProps) {
           Gagal: {params.error}
         </div>
       )}
+      {/* Persetujuan Pendaftaran */}
+<section className="rounded-xl border bg-white p-6">
+  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900">
+        Persetujuan Pendaftaran
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Daftar akun yang membutuhkan persetujuan administrator.
+      </p>
+    </div>
+
+    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+      {pendingAccounts.length} Menunggu
+    </span>
+  </div>
+
+  {pendingAccounts.length === 0 ? (
+    <div className="rounded-lg bg-gray-50 p-6 text-center">
+      <p className="text-sm text-gray-500">
+        Tidak ada pendaftaran yang menunggu persetujuan.
+      </p>
+    </div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[700px] text-left text-sm">
+        <thead>
+          <tr className="border-b bg-gray-50 text-gray-500">
+            <th className="px-4 py-3 font-medium">Nama</th>
+            <th className="px-4 py-3 font-medium">Email</th>
+            <th className="px-4 py-3 font-medium">Role</th>
+            <th className="px-4 py-3 font-medium">Tanggal Daftar</th>
+            <th className="px-4 py-3 font-medium">Aksi</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {pendingAccounts.map((account) => (
+            <tr key={account.id} className="border-b last:border-0">
+              <td className="px-4 py-3 font-medium text-gray-900">
+                {account.full_name || "-"}
+              </td>
+
+              <td className="px-4 py-3 text-gray-600">
+                {emailMap[account.id] || "-"}
+              </td>
+
+              <td className="px-4 py-3 text-gray-600">
+                {account.role === "parent" ? "Wali Murid" : "Guru"}
+              </td>
+
+              <td className="px-4 py-3 text-gray-600">
+                {new Date(account.created_at).toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </td>
+
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <form action={approveUserAccount}>
+                    <input
+                      type="hidden"
+                      name="user_id"
+                      value={account.id}
+                    />
+
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                    >
+                      Setujui
+                    </button>
+                  </form>
+
+                  <form action={rejectUserAccount}>
+                    <input
+                      type="hidden"
+                      name="user_id"
+                      value={account.id}
+                    />
+
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      Tolak
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</section>
 
       {/* Form Buat Akun */}
       <section className="rounded-xl border bg-white p-6">
