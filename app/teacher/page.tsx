@@ -1,4 +1,3 @@
-
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -41,6 +40,117 @@ export default async function TeacherDashboard() {
       .select("*", { count: "exact", head: true })
       .eq("status", "draft"),
   ]);
+
+  // Ambil seluruh laporan yang sudah dipublikasikan
+  const { data: reports } = await supabase
+    .from("student_reports")
+    .select(
+      "id, student_id, academic_period_id, report_date, status, pdf_is_current"
+    )
+    .eq("status", "published")
+    .order("report_date", { ascending: false });
+
+  const publishedReports = [];
+
+  if (reports && reports.length > 0) {
+    const studentIds = [...new Set(reports.map((r) => r.student_id))];
+    const periodIds = [...new Set(reports.map((r) => r.academic_period_id))];
+    const reportIds = reports.map((r) => r.id);
+
+    const [
+      { data: students },
+      { data: periods },
+      { data: generatedReports },
+    ] = await Promise.all([
+      supabase
+        .from("students")
+        .select("id, full_name, class_id")
+        .in("id", studentIds),
+
+      supabase
+        .from("academic_periods")
+        .select("id, academic_year, semester")
+        .in("id", periodIds),
+
+      supabase
+        .from("generated_reports")
+        .select("id, report_id, version, storage_path, created_at")
+        .in("report_id", reportIds)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const classIds = [
+      ...new Set(
+        (students || [])
+          .map((student) => student.class_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+
+    const { data: classes } =
+      classIds.length > 0
+        ? await supabase
+            .from("classes")
+            .select("id, name")
+            .in("id", classIds)
+        : { data: [] };
+
+    const studentMap = new Map(
+      (students || []).map((student) => [student.id, student])
+    );
+
+    const periodMap = new Map(
+      (periods || []).map((period) => [period.id, period])
+    );
+
+    const classMap = new Map(
+      (classes || []).map((item) => [item.id, item])
+    );
+
+    // Karena data diurutkan terbaru terlebih dahulu,
+    // versi pertama untuk setiap report_id adalah versi terbaru.
+    const latestPdfMap = new Map();
+
+    for (const pdf of generatedReports || []) {
+      if (!latestPdfMap.has(pdf.report_id)) {
+        latestPdfMap.set(pdf.report_id, pdf);
+      }
+    }
+
+    for (const report of reports) {
+      const student = studentMap.get(report.student_id);
+      const period = periodMap.get(report.academic_period_id);
+      const pdf = latestPdfMap.get(report.id);
+
+      if (!student || !pdf?.storage_path) continue;
+
+      const classData = student.class_id
+        ? classMap.get(student.class_id)
+        : null;
+
+      const { data: viewData } = await supabase.storage
+        .from("reports")
+        .createSignedUrl(pdf.storage_path, 60 * 60);
+
+      const { data: downloadData } = await supabase.storage
+        .from("reports")
+        .createSignedUrl(pdf.storage_path, 60 * 60, {
+          download: `${student.full_name.replace(/[^a-zA-Z0-9-_]/g, "_")}_Laporan.pdf`,
+        });
+
+      publishedReports.push({
+        id: report.id,
+        studentName: student.full_name,
+        className: classData?.name || "Belum ada kelas",
+        academicYear: period?.academic_year || "-",
+        semester: period?.semester || "-",
+        reportDate: report.report_date,
+        version: pdf.version,
+        viewUrl: viewData?.signedUrl || null,
+        downloadUrl: downloadData?.signedUrl || null,
+      });
+    }
+  }
 
   const menus = [
     {
@@ -123,6 +233,109 @@ export default async function TeacherDashboard() {
                   </p>
                 </Link>
               ))}
+            </div>
+          </section>
+
+          {/* PDF Laporan Terpublikasi */}
+          <section>
+            <div className="mb-5">
+              <h2 className="text-lg font-bold text-slate-900">
+                PDF Laporan Terpublikasi
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Lihat dan unduh laporan siswa yang sudah diterbitkan.
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              {publishedReports.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <div className="mb-3 text-4xl">📄</div>
+                  <h3 className="font-semibold text-slate-800">
+                    Belum ada PDF terpublikasi
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500">
+                    PDF laporan yang sudah diterbitkan akan muncul di sini.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {publishedReports.map((report) => (
+                    <div
+                      key={report.id}
+                      className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-50 text-2xl">
+                          📄
+                        </div>
+
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-900">
+                            {report.studentName}
+                          </h3>
+
+                          <p className="mt-1 text-sm text-slate-500">
+                            {report.className}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Tahun Ajaran: {report.academicYear} · Semester:{" "}
+                            {report.semester}
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                              Published
+                            </span>
+
+                            <span className="text-xs text-slate-400">
+                              PDF versi {report.version}
+                            </span>
+
+                            {report.reportDate && (
+                              <span className="text-xs text-slate-400">
+                                ·{" "}
+                                {new Date(
+                                  `${report.reportDate}T00:00:00`
+                                ).toLocaleDateString("id-ID", {
+                                  day: "numeric",
+                                  month: "long",
+                                  year: "numeric",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 gap-2">
+                        {report.viewUrl && (
+                          <a
+                            href={report.viewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                          >
+                            Lihat PDF
+                          </a>
+                        )}
+
+                        {report.downloadUrl && (
+                          <a
+                            href={report.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+                          >
+                            Unduh
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
